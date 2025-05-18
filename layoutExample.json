@@ -1,0 +1,31 @@
+{
+  "timestamp": 1684158245123,
+  "components": [
+    {
+      "type": "chart",
+      "id": "chart1",
+      "chartType": "bar",
+      "data": {
+        "Q1": 150,
+        "Q2": 200,
+        "Q3": 175,
+        "Q4": 225
+      }
+    },
+    {
+      "type": "text",
+      "id": "text1",
+      "text": "Welcome to the dashboard! Here’s an overview of this quarter’s performance."
+    },
+    {
+      "type": "animation",
+      "id": "anim1",
+      "animationName": "fadeIn",
+      "params": {
+        "duration": 750,
+        "delay": 100,
+        "easing": "ease-in-out"
+      }
+    }
+  ]
+}
