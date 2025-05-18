@@ -1,0 +1,33 @@
+import com.github.gradle.node.yarn.task.YarnTask
+
+plugins {
+    id 'com.github.node-gradle.node' version '7.0.1'
+}
+node {
+    version = '18.15.0'
+    yarnVersion = '1.22.19'
+    download = true
+}
+
+tasks.register('yarnInstall', YarnTask) {
+    dependsOn tasks.named('yarnSetup')
+    inputs.file 'package.json'
+    outputs.dir 'node_modules'
+    outputs.file 'yarn.lock'
+    args = ['install', '--frozen-lockfile']
+}
+
+tasks.register('yarnBuild', YarnTask) {
+    dependsOn 'yarnInstall'
+    inputs.dir fileTree('src')
+    inputs.dir 'node_modules'
+    inputs.files 'tsconfig.json', 'tsconfig.app.json'
+    outputs.dir 'build'
+    args = ['build']
+}
+
+tasks.register('yarnStart', YarnTask) {
+    dependsOn 'yarnBuild'
+    args = ['start']
+    environment.put('PORT', '3000')
+}

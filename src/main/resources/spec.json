@@ -1,0 +1,159 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Layout Dashboard API",
+    "description": "API for managing dynamic dashboard layouts and components",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/api/layout-update": {
+      "get": {
+        "summary": "Get layout values",
+        "operationId": "getLayout",
+        "responses": {
+          "200": {
+            "description": "Current layout configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LayoutUpdate"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Update layout configuration",
+        "operationId": "updateLayout",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LayoutUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Layout updated successfully"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "UIComponent": {
+        "type": "object",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "chart": "#/components/schemas/ChartComponent",
+            "text": "#/components/schemas/TextComponent",
+            "animation": "#/components/schemas/AnimationComponent"
+          }
+        },
+        "required": ["id", "type"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["chart", "text", "animation"]
+          }
+        }
+      },
+      "ChartComponent": {
+        "type": "object",
+        "allOf": [
+          { "$ref": "#/components/schemas/UIComponent" },
+          {
+            "type": "object",
+            "required": ["chartType", "data"],
+            "properties": {
+              "chartType": {
+                "type": "string"
+              },
+              "data": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "TextComponent": {
+        "type": "object",
+        "allOf": [
+          { "$ref": "#/components/schemas/UIComponent" },
+          {
+            "type": "object",
+            "required": ["text"],
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "AnimationComponent": {
+        "type": "object",
+        "allOf": [
+          { "$ref": "#/components/schemas/UIComponent" },
+          {
+            "type": "object",
+            "required": ["animationName", "params"],
+            "properties": {
+              "animationName": {
+                "type": "string"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "duration": {
+                    "type": "integer"
+                  },
+                  "delay": {
+                    "type": "integer"
+                  },
+                  "easing": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "LayoutUpdate": {
+        "type": "object",
+        "required": ["timestamp", "components"],
+        "properties": {
+          "timestamp": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UIComponent"
+            }
+          }
+        }
+      }
+    }
+  }
+}
