@@ -18,7 +18,7 @@ tasks.register('yarnInstall', YarnTask) {
 }
 
 tasks.register('yarnBuild', YarnTask) {
-    dependsOn 'yarnInstall'
+    dependsOn tasks.named('yarnInstall')
     inputs.dir fileTree('src')
     inputs.dir 'node_modules'
     inputs.files 'tsconfig.json', 'tsconfig.app.json'
