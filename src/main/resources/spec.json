@@ -28,10 +28,12 @@
             }
           }
         }
-      },
+      }
+    },
+    "/update": {
       "post": {
-        "summary": "Update layout configuration",
-        "operationId": "updateLayout",
+        "summary": "",
+        "operationId": "update",
         "requestBody": {
           "required": true,
           "content": {
@@ -44,7 +46,25 @@
         },
         "responses": {
           "200": {
-            "description": "Layout updated successfully"
+            "description": "response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "example": "This Worked"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -73,6 +93,26 @@
           }
         }
       },
+      "ChartDataPoint": {
+        "type": "object",
+        "required": ["label", "value", "unit"],
+        "properties": {
+          "label": { "type": "string" },
+          "value": { "type": "number" },
+          "unit": { "type": "string" }
+        }
+      },
+      "ChartDataset": {
+        "type": "object",
+        "required": ["data", "borderColor"],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChartDataPoint" }
+          },
+          "borderColor": { "type": "string" }
+        }
+      },
       "ChartComponent": {
         "type": "object",
         "allOf": [
@@ -85,11 +125,9 @@
                 "type": "string"
               },
               "data": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "number"
-                }
-              }
+                "$ref": "#/components/schemas/ChartDataset"
+              },
+              "title": { "type": "string" }
             }
           }
         ]

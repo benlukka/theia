@@ -1,0 +1,16 @@
+<configuration>
+    <appender name="SENTRY" class="io.sentry.logback.SentryAppender">
+        <dsn>https://ee192e480fa3d8f55d6d9398271b7208@o4509379436150789.ingest.de.sentry.io/4509386242654288</dsn>
+    </appender>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="SENTRY"/>
+    </root>
+</configuration>

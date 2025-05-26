@@ -1,33 +1,83 @@
 package com.benlukka.theia
 
-import com.benlukka.theia.api.api
-import com.benlukka.theia.api.generateOpenApiSpec
-import com.benlukka.theia.api.corsFilter
-import org.http4k.core.then
-import org.http4k.format.Jackson.asJsonObject
+import api.LayoutUpdate
+import com.benlukka.theia.api.Json
+import com.benlukka.theia.api.service.DirectLayoutMessage
+import com.benlukka.theia.api.service.Layout
+import org.http4k.contract.*
+import org.http4k.contract.openapi.ApiInfo
+import org.http4k.contract.openapi.v3.ApiServer
+import org.http4k.contract.openapi.v3.OpenApi3
+import org.http4k.core.*
+import org.http4k.core.Method.GET
+import org.http4k.core.Method.POST
+import org.http4k.core.Status.Companion.OK
+import org.http4k.format.Jackson
+import org.http4k.lens.BiDiBodyLens
 import org.http4k.server.Http4kServer
-import org.http4k.server.Undertow
+import org.http4k.server.Jetty
 import org.http4k.server.asServer
-import java.io.File
+import io.sentry.Sentry
 
-fun main(args: Array<String>) {
-    // Check if we're running in spec generation mode
-    if (args.isNotEmpty() && args[0] == "generateSpecToFile") {
-        // Generate spec directly to a file without starting a server
-        val outputPath = if (args.size > 1) args[1] else "build/openapi/swagger.json"
-        val spec = generateOpenApiSpec().description.asJsonObject().toString()
-        println("Generating spec $spec")
-        File(outputPath).apply {
-            parentFile.mkdirs()
-            writeText(spec)
-            println("📚 Generated OpenAPI spec to ${absolutePath}")
-        }
-        return
+
+fun main() {
+    Sentry.init { options ->
+        options.dsn = "https://ee192e480fa3d8f55d6d9398271b7208@o4509379436150789.ingest.de.sentry.io/4509386242654288"
+        options.isDebug = true
+    }
+    val layoutLens: BiDiBodyLens<LayoutUpdate> = Json.instance.autoBody<LayoutUpdate>().toLens()
+    val stringLens: BiDiBodyLens<String> = Json.instance.autoBody<String>().toLens()
+
+    val getLayout: ContractRoute = "/api/layout-update" meta {
+        summary     = "Get layout values"
+        operationId = "getLayout"
+        tags += Tag("Layout")
+        returning(OK, layoutLens to Layout.get())
+    } bindContract GET to { _: Request ->
+        // handler returns a Response
+        Response(OK).with(layoutLens of Layout.get())
     }
 
-    // Normal server operation
-    val server: Http4kServer = corsFilter.then(api).asServer(Undertow(8080))
+    val update: ContractRoute = "/update" meta {
+        summary     = "update endpoint"
+        operationId = "update"
+        tags += Tag("Layout")
+        receiving(layoutLens)
+        // just register example responses, not lambdas
+        returning(OK,         stringLens to "pong")
+        returning(Status.BAD_REQUEST, stringLens to "Invalid request")
+    } bindContract POST to { req: Request ->
+        runCatching {
+            val update = layoutLens(req)
+            DirectLayoutMessage(update).applyTo(Layout)
+            "pong"
+        }.fold(
+            onSuccess = { res -> Response(OK).with(stringLens of res) },
+            onFailure = { err -> Response(Status.BAD_REQUEST).with(stringLens of "Invalid request: ${err.message}") }
+        )
+    }
+
+    val app = contract {
+        renderer = OpenApi3(
+            ApiInfo(
+                title       = "Layout Dashboard API",
+                description = "API for managing dynamic dashboard layouts and components",
+                version     = "1.0.0"
+            ),
+            Jackson,
+            servers = listOf(ApiServer(Uri.of("http://localhost:8080"), "Local development server"))
+        )
+        descriptionPath = "/openapi.json"
+        routes += getLayout
+        routes += update
+    }
+
+    // 5) start
+    val server: Http4kServer = app.asServer(Jetty(8080))
     server.start()
-    println("⚡️ DashboardService HTTP server running on port 8080")
-    println("📚 API documentation available at http://localhost:8080/docs/swagger.json")
+    Runtime.getRuntime().addShutdownHook(Thread {
+        println("Stopping server")
+        server.stop()
+        println("Server stopped")
+    })
 }
