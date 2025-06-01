@@ -4,7 +4,7 @@ import type { LayoutUpdate, TextComponent as TextComponentType, ChartComponent a
 import { DefaultApi } from './generated';
 import { TextComponent } from './components/TextComponent';
 import { ChartComponent } from './components/ChartComponent';
-
+import * as Sentry from "@sentry/react";
 function App() {
     const [layout, setLayout] = useState<LayoutUpdate | null>(null);
     const [error, setError] = useState<string | null>(null);
