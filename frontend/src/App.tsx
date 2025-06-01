@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
-import type { LayoutUpdate, TextComponent as TextComponentType, ChartComponent as ChartComponentType } from './generated';
+import type { LayoutUpdate, TextComponent as TextComponentType, ChartComponent as ChartComponentType } from './generated/index';
 import { DefaultApi } from './generated';
 import { TextComponent } from './components/TextComponent';
 import { ChartComponent } from './components/ChartComponent';

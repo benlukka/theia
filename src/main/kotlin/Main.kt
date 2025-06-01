@@ -17,6 +17,10 @@ import org.http4k.server.Http4kServer
 import org.http4k.server.Jetty
 import org.http4k.server.asServer
 import io.sentry.Sentry
+import org.http4k.filter.AnyOf
+import org.http4k.filter.CorsPolicy
+import org.http4k.filter.OriginPolicy
+import org.http4k.filter.ServerFilters
 
 fun main() {
     Sentry.init { options ->
@@ -31,7 +35,6 @@ fun main() {
         summary = "Get layout values"
         operationId = "getLayout"
         tags += Tag("Layout")
-        receiving(layoutLens)
         returning(OK, layoutLens to Layout.get())
     } bindContract GET to { _: Request ->
         Response(OK).with(layoutLens of Layout.get())
@@ -55,23 +58,36 @@ fun main() {
         )
     }
 
-    val app = contract {
+    val contractApp = contract {
         renderer = OpenApi3(
             apiInfo = ApiInfo(
                 title = "Layout Dashboard API",
                 description = "API for managing dynamic dashboard layouts and components",
                 version = "1.0.0"
             ),
-          json =  Json.instance,
-                  servers = listOf(ApiServer(Uri.of("http://localhost:8080"), "Local development server"))
+            json =  Json.instance,
+            servers = listOf(ApiServer(Uri.of("http://localhost:8080"), "Local development server"))
         )
         descriptionPath = "/openapi.json"
         routes += getLayout
         routes += update
     }
+    //    Ersetze "http://localhost:3000" durch die tatsächliche URL deines Frontends.
+    val corsPolicy = CorsPolicy(
+        // eine Liste erlaubter Origins
+        OriginPolicy.AnyOf("http://localhost:3000"),
+        methods = listOf(Method.OPTIONS, GET, POST, Method.PUT, Method.DELETE),
+        headers = listOf("Content-Type", "Authorization"),
+        credentials = true
+    )
 
-    val server: Http4kServer = app.asServer(Jetty(8080))
+    // Wrap contractApp with CORS
+    val appWithCors: HttpHandler = ServerFilters.Cors(corsPolicy)(contractApp)
+
+    // Start the server using the CORS-enabled handler
+    val server: Http4kServer = appWithCors.asServer(Jetty(8080))
     server.start()
+
     Runtime.getRuntime().addShutdownHook(Thread {
         println("Stopping server")
         server.stop()

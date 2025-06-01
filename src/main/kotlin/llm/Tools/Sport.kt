@@ -6,7 +6,7 @@ import okhttp3.Request
 
 object Sport {
     private val client = OkHttpClient.Builder().build()
-
+/*
     @Tool(name = "get Gym Checkin History")
     fun getCheckinHistory(): String {
         val request = Request.Builder()
@@ -18,4 +18,5 @@ object Sport {
             return response.body?.string() ?: "No response body"
         }
     }
+    */
 }

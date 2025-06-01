@@ -2,75 +2,209 @@ package com.benlukka.theia.llm
 
 import api.LayoutUpdate
 import api.TextComponent
-import com.benlukka.theia.llm.Tools.Sport
 import com.benlukka.theia.api.service.Layout
+import dev.langchain4j.agent.tool.Tool
 import dev.langchain4j.agent.tool.ToolSpecifications
 import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
+import dev.langchain4j.data.message.ToolExecutionResultMessage
 import dev.langchain4j.model.chat.request.ChatRequest
-import dev.langchain4j.model.chat.request.ResponseFormat
 import dev.langchain4j.model.ollama.OllamaChatModel
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Duration
+import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.*
+
+class DateTool {
+    @Tool("Get the current weekday in German")
+    fun getCurrentWeekday(): String {
+        val today = LocalDate.now()
+        val weekday = today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.GERMAN)
+        println("DateTool executed: Heute ist $weekday")
+        return "Heute ist $weekday"
+    }
+}
 
 fun main() {
+    // Remove JSON response format to allow proper tool calling
     val model = OllamaChatModel.builder()
         .modelName("qwen3:8b")
         .baseUrl("http://192.168.178.198:11343")
-        .responseFormat(ResponseFormat.JSON)
+        // Don't force JSON format initially - let tools work first
         .timeout(Duration.ofMinutes(5))
         .build()
-println(getResponseFormat())
-    val systemPrompt = """
-You are an API-driven assistant. You must always respond with a JSON object that strictly matches the following schema:
 
+    println("=== TOOL SETUP ===")
+    val dateToolInstance = DateTool()
+    val toolSpecs = ToolSpecifications.toolSpecificationsFrom(dateToolInstance)
+
+    println("Registered tools: ${toolSpecs.size}")
+    toolSpecs.forEach { spec ->
+        println("Tool: ${spec.name()} - ${spec.description()}")
+    }
+
+    // Two-phase system prompt: First get tool data, then format as JSON
+    val systemPrompt = """
+You are a helpful assistant with access to tools.
+
+Available tools:
+- getCurrentWeekday(): Returns the current weekday in German
+
+INSTRUCTION:
+When the user asks for today’s weekday, you MUST:
+1. Call getCurrentWeekday() immediately.
+2. After receiving the tool result, respond with NOTHING but a single valid JSON object that exactly matches the schema below—no thoughts, no explanations, no extra text.
+
+SCHEMA:
 ${getResponseFormat()}
 
-**Rules:**
-- The top-level object must have a `timestamp` (current time in milliseconds) and a `components` array.
-- Each component in `components` must have a `type` field, which can only be `"chart"`, `"text"`, or `"animation"`.
-    - For `"chart"`: include `id`, `chartType` (only `"bar"` allowed), and `data` (must match the schema, no extra fields).
-    - For `"text"`: include `id` and `text`.
-    - For `"animation"`: include `id`, `animationName`, and a required `params` object.
-- Do not include any fields or types not defined in the schema.
-- Do not output explanations, natural language, or extra text—only the JSON object.
-- When using a Tool, call it and then transform its output into the required JSON schema before responding.
-- Never return raw API or tool responses.
-- If you cannot produce a valid response, return a single `"text"` component with an error message.
-
-**Strictly follow the schema and these rules. Any deviation will cause a system error.**
+RULES:
+- Do not include any narrative or chain-of-thought. 
+- Do not include any text outside the JSON.
+- Use the current timestamp in milliseconds.
+- Include the tool’s returned string in a TextComponent with id "weekday-info".
+- Do not output your thought process or reasoning process.
+Example:
+If getCurrentWeekday() returns "Heute ist Mittwoch", respond with:
+{
+  "timestamp": 1717180800000,
+  "components": [
+    {
+      "type": "text",
+      "id": "weekday-info",
+      "text": "Heute ist Mittwoch"
+    }
+  ]
+}
 """.trimIndent()
-    val userPrompt = "wie oft war ich insgesamt im fitx".trimIndent()
+
+    val userPrompt = "welcher wochentag ist heute"
 
     fun getLLMResponse(messages: List<ChatMessage>): String {
-        val toolSpecs = ToolSpecifications.toolSpecificationsFrom(Sport)
         var currentMessages = messages
-        while (true) {
+        var iterationCount = 0
+        val maxIterations = 10
+        var toolWasCalled = false
+
+        while (iterationCount < maxIterations) {
+            iterationCount++
+            println("\n=== ITERATION $iterationCount ===")
+
             val response = model.chat(
                 ChatRequest.builder()
                     .toolSpecifications(toolSpecs)
                     .messages(currentMessages)
                     .build()
             )
+
             val aiMessage = response.aiMessage()
-            if (aiMessage?.text() != null) {
-                return aiMessage.text()
-            }
+            println("AI Response:")
+            println("- Text: ${aiMessage?.text()}")
+            println("- Tool requests: ${aiMessage?.toolExecutionRequests()?.size ?: 0}")
+
+            // Handle tool execution requests
             val toolRequests = aiMessage?.toolExecutionRequests()
             if (!toolRequests.isNullOrEmpty()) {
-                val toolRequest = toolRequests.first()
-                val toolResult = Sport.getCheckinHistory()
-                println("Tool result: $toolResult") // Debug: log tool output
-                currentMessages = currentMessages + dev.langchain4j.data.message.ToolExecutionResultMessage.from(
-                    toolRequest, toolResult
-                )
-            } else {
-                error("No AI message text and no tool requests in response")
+                println("=== EXECUTING TOOLS ===")
+                toolWasCalled = true
+
+                for (toolRequest in toolRequests) {
+                    println("Calling tool: ${toolRequest.name()}")
+
+                    val toolResult = when (toolRequest.name()) {
+                        "getCurrentWeekday" -> {
+                            dateToolInstance.getCurrentWeekday()
+                        }
+                        else -> "Unknown tool: ${toolRequest.name()}"
+                    }
+
+                    println("Tool result: $toolResult")
+                    currentMessages = currentMessages + ToolExecutionResultMessage.from(toolRequest, toolResult)
+                }
+
+                // Continue to get the formatted response
+                continue
             }
+
+            // Check if we have a text response
+            val responseText = aiMessage?.text()?.removeHtmlTags()
+            if (responseText != null && responseText.trim().isNotEmpty()) {
+                println("Final response received")
+
+                // If tool was called and we have a response, it should be JSON
+                if (toolWasCalled) {
+                    println("Tool was called, expecting JSON response")
+                    return responseText
+                }
+
+                // If no tool was called but we have text, the model might have skipped the tool
+                println("WARNING: Tool was not called, but we have a response")
+                return responseText
+            }
+
+            println("No response received, continuing...")
         }
+
+        // Fallback if no proper response
+        println("Max iterations reached, creating fallback response")
+        return """{
+  "timestamp": ${System.currentTimeMillis()},
+  "components": [
+    {
+      "type": "text",
+      "id": "error",
+      "text": "Could not determine current weekday"
+    }
+  ]
+}"""
+    }
+
+    // Alternative approach: Try with a more direct prompt
+    fun getLLMResponseDirect(messages: List<ChatMessage>): String {
+        println("\n=== TRYING DIRECT APPROACH ===")
+
+        // First, manually call the tool to get the weekday
+        val weekdayResult = dateToolInstance.getCurrentWeekday()
+        println("Manual tool call result: $weekdayResult")
+
+        // Now ask LLM to format it as JSON
+        val formatPrompt = """
+Format this information as JSON matching the required schema:
+Information: "$weekdayResult"
+
+Required JSON format:
+${getResponseFormat()}
+
+Put the weekday information in a text component. Respond with ONLY the JSON, no other text.
+""".trimIndent()
+
+        val response = model.chat(
+            ChatRequest.builder()
+                .messages(listOf(
+                    SystemMessage.systemMessage("You format information as JSON. Respond only with valid JSON matching the given schema."),
+                    UserMessage.from(formatPrompt)
+                ))
+                .build()
+        )
+
+        return response.aiMessage()?.text() ?: """{
+  "timestamp": ${System.currentTimeMillis()},
+  "components": [
+    {
+      "type": "text", 
+      "id": "weekday",
+      "text": "$weekdayResult"
+    }
+  ]
+}"""
     }
 
     val initialMessages = listOf(
@@ -78,13 +212,29 @@ ${getResponseFormat()}
         UserMessage.from(userPrompt)
     )
 
+    println("\n=== STARTING CONVERSATION ===")
+    println("User prompt: $userPrompt")
+
+    // Try the tool-based approach first
     var llmResponse = getLLMResponse(initialMessages)
+
+    // If that didn't work well, try the direct approach
+    if (llmResponse.isBlank() || !llmResponse.trim().startsWith("{")) {
+        println("\n=== TOOL APPROACH FAILED, TRYING DIRECT APPROACH ===")
+        llmResponse = getLLMResponseDirect(initialMessages)
+    }
+
     var success = false
     var retryCount = 0
-    val maxRetries = 5
+    val maxRetries = 3
 
     while (!success && retryCount <= maxRetries) {
         try {
+            // Validate it's proper JSON before sending
+            if (!llmResponse.trim().startsWith("{")) {
+                throw Exception("Response is not JSON format")
+            }
+
             val url = URL("http://127.0.0.1:8080/update")
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
@@ -92,26 +242,33 @@ ${getResponseFormat()}
             connection.doOutput = true
 
             OutputStreamWriter(connection.outputStream).use { it.write(llmResponse) }
-            println("LLM response: $llmResponse") // Debug: log LLM output
+            println("LLM response sent: $llmResponse")
+
             val responseCode = connection.responseCode
-            println("Backend response: $responseCode")
-            connection.inputStream.close()
-            success = true
-        } catch (e: Exception) {
-            println("Failed to parse LLM response: ${e.message}")
-            e.printStackTrace()
-            retryCount++
-            if (retryCount <= maxRetries) {
-                val errorPrompt = "The previous JSON response could not be processed due to this error: ${e.message}. Please try again and ensure the response strictly matches the required JSON schema."
-                val retryMessages = initialMessages + UserMessage.from(errorPrompt)
-                llmResponse = getLLMResponse(retryMessages)
+            println("Backend response code: $responseCode")
+
+            if (responseCode == 200) {
+                success = true
             } else {
+                throw Exception("Backend returned error code: $responseCode")
+            }
+
+            connection.inputStream.close()
+        } catch (e: Exception) {
+            println("Failed to send response: ${e.message}")
+            retryCount++
+
+            if (retryCount <= maxRetries) {
+                // Try the direct approach as fallback
+                llmResponse = getLLMResponseDirect(initialMessages)
+            } else {
+                println("All retries failed, using fallback")
                 val fallbackLayout = LayoutUpdate(
                     timestamp = System.currentTimeMillis(),
                     components = listOf(
                         TextComponent(
                             id = "error-message",
-                            text = "Failed to parse LLM response"
+                            text = "Failed to get weekday information"
                         )
                     )
                 )
@@ -119,4 +276,9 @@ ${getResponseFormat()}
             }
         }
     }
+}
+fun String.removeHtmlTags(): String {
+    val doc: Document = Jsoup.parse(this, "", Parser.xmlParser())
+     doc.select("think").forEach(Element::remove)
+    return doc.html()
 }
