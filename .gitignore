@@ -9,6 +9,7 @@ out/
 *.iml
 *.iws
 *.ipr
+.onedev-buildspec.yml
 
 # Logs
 logs/
