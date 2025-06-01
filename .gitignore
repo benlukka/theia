@@ -3,12 +3,13 @@
 build/
 out/
 *.class
-
+.onedev
 # IntelliJ IDEA
 .idea/
 *.iml
 *.iws
 *.ipr
+.onedev-buildspec.yml
 
 # Logs
 logs/
