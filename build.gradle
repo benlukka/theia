@@ -15,10 +15,13 @@ plugins {
     id "de.undercouch.download" version "5.4.0"
 
 }
+tasks.named("sentryCollectSourcesJava") {
+    mustRunAfter("compileKotlin", "openApiGenerate")
+}
 group = 'com.benlukka.theia'
 version = '1.0-SNAPSHOT'
 
-def http4kVersion = "5.20.0.0"
+def http4kVersion = "5.47.0.0"
 repositories {
     mavenCentral()
 }
@@ -29,12 +32,13 @@ sentry {
     authToken = System.getenv("SENTRY_AUTH_TOKEN")
 }
 dependencies {
-    testImplementation 'org.jetbrains.kotlin:kotlin-test'
+    testImplementation('org.jetbrains.kotlin:kotlin-test')
     implementation("org.http4k:http4k-client-okhttp:${http4kVersion}")
     implementation("org.http4k:http4k-client-fuel:${http4kVersion}")
     implementation("org.http4k:http4k-client-websocket:${http4kVersion}")
     implementation("org.http4k:http4k-core:${http4kVersion}")
     implementation("org.http4k:http4k-format-jackson:${http4kVersion}")
+    implementation("org.http4k:http4k-contract:${http4kVersion}")
     implementation("org.http4k:http4k-multipart:${http4kVersion}")
     implementation("org.http4k:http4k-server-undertow:${http4kVersion}")
     implementation("org.http4k:http4k-template-handlebars:${http4kVersion}")
@@ -43,12 +47,10 @@ dependencies {
     implementation("dev.langchain4j:langchain4j-ollama:1.0.0-beta5")
     implementation("org.http4k:http4k-server-jetty:${http4kVersion}")
     implementation("org.http4k:http4k-client-websocket:${http4kVersion}")
-    implementation("org.http4k:http4k-contract:${http4kVersion}")
     implementation("org.http4k:http4k-opentelemetry:${http4kVersion}")
     implementation("io.sentry:sentry:8.11.1")
     implementation("io.sentry:sentry-logback:8.11.1")
-    implementation("com.fasterxml.jackson.module:jackson-module-jsonSchema:2.19.0")}
-
+}
 configurations.named('default') {
     canBeResolved = true
 }
@@ -69,8 +71,9 @@ tasks.named("openApiGenerate") {
 // Configure openApiGenerate *extension*
 openApiGenerate {
     generatorName = "typescript-fetch"
-    inputSpec = "$projectDir/src/main/resources/spec.json"
+    inputSpec = "$projectDir/src/main/resources/openapi.json"
     outputDir = "$projectDir/frontend/src/generated"
+    validateSpec.set(false)
 
     typeMappings = [
             DateTime: "string",
@@ -82,7 +85,8 @@ openApiGenerate {
             enumPropertyNaming      : "UPPERCASE",
             modelPropertyNaming     : "original",
             useSingleRequestParameter: "true",
-            withInterfaces          : "true"
+            withInterfaces          : "true",
+            includeUnreferencedSchemas : "true"
     ]
 }
 class TeeOutputStream extends OutputStream {

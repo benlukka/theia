@@ -2,13 +2,11 @@ package api
 
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
-
-// Base interface for UI Components with Jackson polymorphism
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
-)
+    property = "type",
+    )
 @JsonSubTypes(
     JsonSubTypes.Type(value = ChartComponent::class, name = "chart"),
     JsonSubTypes.Type(value = TextComponent::class, name = "text"),
@@ -51,7 +49,6 @@ data class AnimationParams(
     val delay: Int,
     val easing: String
 )
-
 data class LayoutUpdate(
     val timestamp: Long,
     val components: List<UIComponent>

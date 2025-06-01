@@ -8,8 +8,6 @@ import kotlin.reflect.full.findAnnotation
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
-
-
 fun getResponseFormat(): String {
     val mapper = Json.instance.mapper
 
